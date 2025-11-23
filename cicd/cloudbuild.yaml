@@ -10,7 +10,7 @@ substitutions:
   _NAMESPACE_NAME: "test-server"
   _DEPLOYMENT_NAME: "test-server"
   _APP_LABEL: "test-server"
-  _K8S_PATH: "test-project/test-server/k8s"
+  _K8S_PATH: "k8s"
   
   # 應用程式配置
   _CONTAINER_PORT: "8080"
@@ -34,7 +34,6 @@ steps:
 # 1) 建置並推送 Docker 映像檔
 - name: "gcr.io/cloud-builders/docker"
   id: "docker-build-push"
-  dir: "test-project/test-server"
   args:
     - "build"
     - "-t"
