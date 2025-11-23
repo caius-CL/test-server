@@ -1,0 +1,59 @@
+# Cloud Build 參數化使用範例
+# 這個檔案展示如何使用不同的參數來部署應用程式
+
+# 範例 1: 開發環境
+substitutions:
+  # GCP 配置
+  _REGION: "asia-east1"
+  _REPO_NAME: "caius-test-repo"
+  _SERVICE_NAME: "test-server"
+  _CLUSTER_NAME: "dev-cluster"
+  _ZONE_NAME: "asia-east1"
+  
+  # Kubernetes 配置
+  _NAMESPACE_NAME: "test-server-dev"
+  _DEPLOYMENT_NAME: "test-server"
+  _APP_LABEL: "test-server"
+  _K8S_PATH: "k8s"
+  
+  # 應用程式配置
+  _CONTAINER_PORT: "8080"
+  _SERVICE_PORT: "8080"
+  _REPLICAS: "1"
+  _MAX_SURGE: "50%"
+  _MAX_UNAVAILABLE: "1"
+  _INITIAL_DELAY_SECONDS: "30"
+  _PERIOD_SECONDS: "15"
+
+# 範例 2: 生產環境
+substitutions:
+  # GCP 配置
+  _REGION: "asia-east1"
+  _REPO_NAME: "caius-test-repo"
+  _SERVICE_NAME: "test-server"
+  _CLUSTER_NAME: "prod-cluster"
+  _ZONE_NAME: "asia-east1"
+  
+  # Kubernetes 配置
+  _NAMESPACE_NAME: "test-server-prod"
+  _DEPLOYMENT_NAME: "test-server"
+  _APP_LABEL: "test-server"
+  _K8S_PATH: "k8s"
+  
+  # 應用程式配置
+  _CONTAINER_PORT: "8080"
+  _SERVICE_PORT: "8080"
+  _REPLICAS: "3"
+  _MAX_SURGE: "25%"
+  _MAX_UNAVAILABLE: "0"
+  _INITIAL_DELAY_SECONDS: "10"
+  _PERIOD_SECONDS: "10"
+
+# 使用方式:
+# 1. 複製 cloudbuild.yaml 到你的專案
+# 2. 修改 substitutions 區塊中的參數
+# 3. 執行: gcloud builds submit --config=cicd/cloudbuild.yaml .
+# 4. 或者使用 --substitutions 參數覆蓋特定值:
+#    gcloud builds submit --config=cicd/cloudbuild.yaml \
+#      --substitutions=_REPLICAS=5,_NAMESPACE_NAME=test-server-prod .
+

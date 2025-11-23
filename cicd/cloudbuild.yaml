@@ -1,0 +1,168 @@
+substitutions:
+  # GCP 配置
+  _REGION: "asia-east1"
+  _REPO_NAME: "caius-test-repo"
+  _SERVICE_NAME: "test-server"
+  _CLUSTER_NAME: "temp-cluster-01"
+  _ZONE_NAME: "asia-east1"
+  
+  # Kubernetes 配置
+  _NAMESPACE_NAME: "test-server"
+  _DEPLOYMENT_NAME: "test-server"
+  _APP_LABEL: "test-server"
+  _K8S_PATH: "test-project/test-server/k8s"
+  
+  # 應用程式配置
+  _CONTAINER_PORT: "8080"
+  _SERVICE_PORT: "8080"
+  _REPLICAS: "1"
+  _MAX_SURGE: "25%"
+  _MAX_UNAVAILABLE: "0"
+  _INITIAL_DELAY_SECONDS: "10"
+  _PERIOD_SECONDS: "10"
+  
+  # 計算的變數
+  _IMAGE_PATH: ${_REGION}-docker.pkg.dev/${PROJECT_ID}/${_REPO_NAME}/${_SERVICE_NAME}
+
+options:
+  logging: CLOUD_LOGGING_ONLY
+  machineType: "E2_HIGHCPU_8"
+  diskSizeGb: "100"
+timeout: "1800s"
+
+steps:
+# 1) 建置並推送 Docker 映像檔
+- name: "gcr.io/cloud-builders/docker"
+  id: "docker-build-push"
+  dir: "test-project/test-server"
+  args:
+    - "build"
+    - "-t"
+    - "${_IMAGE_PATH}:${SHORT_SHA}"
+    - "-t"
+    - "${_IMAGE_PATH}:latest"
+    - "."
+
+# 2) 推送映像檔到 Artifact Registry
+- name: "gcr.io/cloud-builders/docker"
+  id: "docker-push"
+  args:
+    - "push"
+    - "${_IMAGE_PATH}:${SHORT_SHA}"
+
+- name: "gcr.io/cloud-builders/docker"
+  id: "docker-push-latest"
+  args:
+    - "push"
+    - "${_IMAGE_PATH}:latest"
+
+# 3) 取得 GKE 叢集憑證
+- name: "gcr.io/google.com/cloudsdktool/cloud-sdk:slim"
+  id: "gke-auth"
+  entrypoint: bash
+  args:
+    - "-c"
+    - |
+      echo "Getting GKE cluster credentials..."
+      gcloud container clusters get-credentials ${_CLUSTER_NAME} --region ${_ZONE_NAME}
+      echo "Successfully connected to GKE cluster"
+
+# 4) 部署 Kubernetes 資源
+- name: "gcr.io/cloud-builders/kubectl"
+  id: "kubectl-apply"
+  entrypoint: bash
+  args:
+    - "-c"
+    - |
+      echo "=== Kubernetes Deployment ==="
+      echo "Deploying with image: ${_IMAGE_PATH}:${SHORT_SHA}"
+      
+      # 切換到 k8s 目錄
+      cd ${_K8S_PATH}
+      
+      # 建立 namespace
+      kubectl apply -f namespace.yaml
+      
+      # 替換所有參數
+      echo "Replacing parameters in Kubernetes manifests..."
+      
+      # 替換 deployment.yaml
+      sed -i "s|REPLACEME_NAMESPACE|${_NAMESPACE_NAME}|g" deployment.yaml
+      sed -i "s|REPLACEME_DEPLOYMENT_NAME|${_DEPLOYMENT_NAME}|g" deployment.yaml
+      sed -i "s|REPLACEME_APP_LABEL|${_APP_LABEL}|g" deployment.yaml
+      sed -i "s|REPLACEME_REPLICAS|${_REPLICAS}|g" deployment.yaml
+      sed -i "s|REPLACEME_MAX_SURGE|${_MAX_SURGE}|g" deployment.yaml
+      sed -i "s|REPLACEME_MAX_UNAVAILABLE|${_MAX_UNAVAILABLE}|g" deployment.yaml
+      sed -i "s|REPLACEME_CONTAINER_PORT|${_CONTAINER_PORT}|g" deployment.yaml
+      sed -i "s|REPLACEME_INITIAL_DELAY_SECONDS|${_INITIAL_DELAY_SECONDS}|g" deployment.yaml
+      sed -i "s|REPLACEME_PERIOD_SECONDS|${_PERIOD_SECONDS}|g" deployment.yaml
+      sed -i "s|REPLACEME_IMAGE|${_IMAGE_PATH}:${SHORT_SHA}|g" deployment.yaml
+      
+      # 替換 service.yaml
+      sed -i "s|REPLACEME_NAMESPACE|${_NAMESPACE_NAME}|g" service.yaml
+      sed -i "s|REPLACEME_DEPLOYMENT_NAME|${_DEPLOYMENT_NAME}|g" service.yaml
+      sed -i "s|REPLACEME_APP_LABEL|${_APP_LABEL}|g" service.yaml
+      sed -i "s|REPLACEME_SERVICE_PORT|${_SERVICE_PORT}|g" service.yaml
+      sed -i "s|REPLACEME_CONTAINER_PORT|${_CONTAINER_PORT}|g" service.yaml
+      
+      # 部署 service 和 deployment
+      kubectl apply -f service.yaml
+      kubectl apply -f deployment.yaml
+      
+      echo "Successfully applied Kubernetes manifests"
+
+# 5) 等待部署完成
+- name: "gcr.io/cloud-builders/kubectl"
+  id: "rollout-status"
+  entrypoint: bash
+  args:
+    - "-c"
+    - |
+      echo "Waiting for deployment rollout to complete..."
+      kubectl -n ${_NAMESPACE_NAME} rollout status deployment/${_DEPLOYMENT_NAME} --timeout=600s
+      
+      # 檢查 Pod 狀態
+      echo "Checking pod status..."
+      kubectl -n ${_NAMESPACE_NAME} get pods -l app=${_APP_LABEL}
+      
+      echo "Deployment rollout completed successfully"
+
+# 6) 驗證部署
+- name: "gcr.io/cloud-builders/kubectl"
+  id: "verify-deployment"
+  entrypoint: bash
+  args:
+    - "-c"
+    - |
+      echo "=== Deployment Verification ==="
+      
+      # 顯示 deployment 狀態
+      echo "Deployment status:"
+      kubectl -n ${_NAMESPACE_NAME} get deployment ${_DEPLOYMENT_NAME} -o wide
+      
+      # 顯示 service 狀態
+      echo "Service status:"
+      kubectl -n ${_NAMESPACE_NAME} get svc ${_DEPLOYMENT_NAME} -o wide
+      
+      # 顯示 pod 狀態
+      echo "Pod status:"
+      kubectl -n ${_NAMESPACE_NAME} get pods -l app=${_APP_LABEL} -o wide
+      
+      # 檢查健康狀態
+      echo "Checking pod health..."
+      
+      ready_pods=$$(kubectl -n ${_NAMESPACE_NAME} get pods -l app=${_APP_LABEL} --no-headers 2>/dev/null | grep -c "Running" || echo "0")
+      total_pods=$$(kubectl -n ${_NAMESPACE_NAME} get pods -l app=${_APP_LABEL} --no-headers 2>/dev/null | wc -l | tr -d ' ')
+      
+      echo "Ready pods: $${ready_pods}/$${total_pods}"
+      
+      if [ "$${ready_pods}" -eq "$${total_pods}" ] && [ "$${total_pods}" -gt 0 ]; then
+        echo "✅ All pods are ready and healthy"
+      else
+        echo "❌ Not all pods are ready ($${ready_pods}/$${total_pods})"
+        kubectl -n ${_NAMESPACE_NAME} describe pods -l app=${_APP_LABEL}
+        exit 1
+      fi
+      
+      echo "🎉 Deployment verification completed successfully!"
+

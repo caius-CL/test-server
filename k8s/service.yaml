@@ -1,0 +1,16 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: REPLACEME_DEPLOYMENT_NAME
+  namespace: REPLACEME_NAMESPACE
+  labels:
+    app: REPLACEME_APP_LABEL
+spec:
+  type: ClusterIP
+  ports:
+  - port: REPLACEME_SERVICE_PORT
+    targetPort: REPLACEME_CONTAINER_PORT
+    protocol: TCP
+    name: http
+  selector:
+    app: REPLACEME_APP_LABEL

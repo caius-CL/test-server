@@ -1,0 +1,58 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: REPLACEME_DEPLOYMENT_NAME
+  namespace: REPLACEME_NAMESPACE
+  labels:
+    app: REPLACEME_APP_LABEL
+spec:
+  replicas: REPLACEME_REPLICAS
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: REPLACEME_MAX_SURGE
+      maxUnavailable: REPLACEME_MAX_UNAVAILABLE
+  selector:
+    matchLabels:
+      app: REPLACEME_APP_LABEL
+  template:
+    metadata:
+      labels:
+        app: REPLACEME_APP_LABEL
+      annotations:
+        # Prometheus 抓取配置
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "REPLACEME_CONTAINER_PORT"
+        prometheus.io/path: "/metrics"
+    spec:
+      containers:
+      - name: test-server
+        image: REPLACEME_IMAGE
+        imagePullPolicy: Always
+        ports:
+        - containerPort: REPLACEME_CONTAINER_PORT
+          name: http
+          protocol: TCP
+        resources:
+          requests:
+            cpu: 100m
+            memory: 128Mi
+          limits:
+            cpu: 500m
+            memory: 512Mi
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: REPLACEME_CONTAINER_PORT
+          initialDelaySeconds: REPLACEME_INITIAL_DELAY_SECONDS
+          periodSeconds: REPLACEME_PERIOD_SECONDS
+          timeoutSeconds: 5
+          failureThreshold: 3
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: REPLACEME_CONTAINER_PORT
+          initialDelaySeconds: 5
+          periodSeconds: REPLACEME_PERIOD_SECONDS
+          timeoutSeconds: 3
+          failureThreshold: 3
